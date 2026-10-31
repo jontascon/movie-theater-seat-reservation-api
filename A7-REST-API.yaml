@@ -1,0 +1,159 @@
+openapi: 3.0.3
+
+info:
+  title: Movie Theater Seat Hold API
+  description: >
+    This API allows customers to check available seating
+    for a movie showtime and temporarily hold selected seats
+    before completing their purchase. Customers can also
+    release a seat hold if they decide not to proceed
+    with payment.
+  version: 1.0.0
+
+
+paths:
+  /showtimes/{showtimeId}/seats:
+    get:
+      summary: Check available seating for a movie showtime
+      parameters:
+        - name: showtimeId
+          in: path
+          required: true
+          description: ID of the selected movie showtime
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Seats retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  showtimeId:
+                    type: string
+                  seats:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        seatId:
+                          type: string
+                        row:
+                          type: string
+                        number:
+                          type: integer
+                        price:
+                          type: number
+                          description: Ticket price in USD
+                          format: double
+                        status:
+                          type: string
+                          enum: [available, held, sold]
+        '404':
+          description: Movie showtime not found
+
+  /seat-holds:
+    post:
+      summary: Hold selected seats for checkout
+      description: >
+        Temporarily holds seats for a selected movie showtime.
+        All requested seats must be available before the hold
+        is created. If another customer has already held or
+        purchased one of the seats, the request is rejected.
+        The hold expires after 10 minutes if checkout is not
+        completed in time.
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - showtimeId
+                - seatIds
+              properties:
+                showtimeId:
+                  type: string
+                  description: ID of the selected movie showtime
+                seatIds:
+                  type: array
+                  description: Seats the customer wants to hold
+                  minItems: 1
+                  uniqueItems: true
+                  items:
+                    type: string
+
+      responses:
+        '201':
+          description: >
+            Seats successfully held for checkout.
+            The response includes the hold ID and expiration time.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  holdId:
+                    type: string
+                  seatIds:
+                    type: array
+                    items:
+                      type: string
+                  expiresAt:
+                    type: string
+                    format: date-time
+
+        '400':
+          description: >
+            Invalid request or no seats selected.
+
+        '404':
+          description: >
+            The selected movie showtime does not exist.
+
+        '409':
+          description: >
+            One or more requested seats are already held
+            or purchased by another customer.
+            No seats are held when this conflict occurs.
+
+
+  /seat-holds/{holdId}:
+    delete:
+      summary: Release a seat hold before checkout
+      description: >
+        Releases a temporary seat hold when a customer
+        cancels their purchase. The seats become available
+        for other customers to select. Holds that have
+        expired or have already been used to complete
+        a purchase cannot be released.
+
+      parameters:
+        - name: holdId
+          in: path
+          required: true
+          description: ID of the seat hold to release
+          schema:
+            type: string
+
+      responses:
+        '204':
+          description: >
+            Seat hold released successfully.
+            The selected seats are available again.
+
+        '404':
+          description: >
+            No seat hold was found with the provided ID.
+
+        '409':
+          description: >
+            The seat hold has already been used to complete
+            a purchase and cannot be released.
+
+        '410':
+          description: >
+            The seat hold has expired and is no longer active.
+            The seats have already been released.
